@@ -12,12 +12,24 @@
 // https://github.com/beomjoo90/OOP2021 , branch: 1학기
 
 // 4/23 수업 : 함수화
+// 4/26 수업 : 구조체 사용 준비
 
 using namespace std;
 
 const int directionToLeft = 0;
 const int directionToRight = 1;
 const int screenSize = 80;
+
+struct Screen {
+	//const int screenSize = 80;
+	char canvas[screenSize + 1];
+};
+
+struct Player {
+	char	face[20];
+	int		pos;
+	int		nRemaining;
+};
 
 
 void clear(char* screen)
@@ -42,6 +54,7 @@ void render(char* screen)
 	screen[screenSize] = '\0';  // render screen
 	printf("%s\r", screen);
 }
+
 
 
 void moveLeft(int* position)
@@ -212,7 +225,7 @@ int main()
 			if (areReady[i] == true) continue;
 
 			if (bulletPositions[i] >= 0 && bulletPositions[i] < screenSize) {
-				draw(screen); // draw bullet
+				draw(screen, bulletPositions[i], '-'); // draw bullet
 			}
 		}
 

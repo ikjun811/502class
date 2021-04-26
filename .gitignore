@@ -30,3 +30,5 @@
 *.exe
 *.out
 *.app
+OOP2021_1.vcxproj.filters
+*.tlog
