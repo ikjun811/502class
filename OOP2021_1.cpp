@@ -16,17 +16,59 @@
 // 4/23 수업 : 함수화
 // 4/26 수업 : 구조체 사용 준비
 // 4/30 수업 : 구조체 정리 역할맞게 함수 정리(떠넘기기)
+// 5/3 수업 : forward declaration 전방위 선언 
+//				function prototype declaration 함수 원형 선언
 
-using namespace std;
 
 const int directionToLeft = 0;
 const int directionToRight = 1;
-const int screenSize = 80;
+
 
 struct Screen {
 	int		size;
-	char*	canvas;
+	char* canvas;
+
+	// constructor (생성자 함수) 메모리공간상에 적재되는 순간 호출되는
+	Screen(unsigned int size)
+	{
+		if (size == 0) size = 80;
+		this->size = size;
+		canvas = (char*)malloc(sizeof(char) * (size + 1));
+	}
+	void clear()
+	{
+		memset(canvas, ' ', size);
+	}
+	void draw(int pos, const char* face)
+	{
+		strncpy(&(canvas[pos]), face, strlen(face));
+	}
+	void draw(int pos, char face)
+	{
+		if (pos < 0 || pos >= size) return;
+		canvas[pos] = face;
+	}
+	void render()
+	{
+		canvas[size] = '\0';  // render screen
+		printf("%s\r", canvas);
+	}
+	bool isInRange(Bullet* bullet)
+	{
+		int bullet_pos = bullet->getPos(bullet);
+		return bullet_pos >= 0 && bullet_pos < size;
+	}
+
+	// destructor (소멸자 함수) 메모리공간상에서 없어지는 순간 호출되는 함수
+	~Screen()
+	{
+		free(canvas);
+		canvas = nullptr;
+		size = 0;
+	}
 };
+
+
 
 struct Player {
 	char	face[20];
@@ -48,50 +90,21 @@ struct Bullet {
 
 struct Bullets {
 	int		nBullets;
-	Bullet*	bullets;
+	Bullet* bullets;
 };
+
+extern int player_getPos(Player*);
+extern const char* player_getFace(Player*);
+
+extern int enemy_getPos(Enemy*);
+
+extern int bullet_getPos(Bullet*);
+extern int bullet_getDirection(Bullet* bullet);
 
 extern void bullet_setFire(Bullet* bullet, Player* player, Enemy* enemy);
 extern int bullets_find_unused_bullet(Bullets* bullets);
 
-void screen_init(Screen* screen,unsigned int size)
-{
-	if (screenSize == 0) screenSize = 80;
-	screen->size = screenSize;
-	screen->canvas = (char*)malloc(sizeof(char) * (screenSize + 1));
-}
-void screen_clear(Screen* screen)
-{
-	memset(screen->canvas, ' ', screen->size);
-}
-void screen_draw(Screen* screen, int pos, const char* face)
-{
-	strncpy( &(screen->canvas[pos]), face, strlen(face));
-}
-// 함수 이름이 같아도 입력파라미터 차이가 있으면 다르게 봄
-void screen_draw(Screen* screen, int pos, char face)
-{
-	if (pos < 0 || pos >= screen->size) return;
-	(screen->canvas[pos]) = face;
-}
-void screen_render(Screen* screen)
-{
-	screen->canvas[screen->size] = '\0';  // render screen
-	printf("%s\r", screen->canvas);
-}
-bool screen_isInRange(Screen* screen, Bullet* bullet)
-{
-	return bullet->pos >= 0 && bullet->pos < screen->size;
-}
-void screen_deinit(Screen* screen)
-{
-	free(screen->canvas);
-	screen->canvas = nullptr;
-	screen->size = 0;
-}
-
-
-void player_init(Player* player, int pos, const char* face)
+void player_init(Player* player, const char* face, int pos)
 {
 	strcpy(player->face, face);
 	player->pos = pos;
@@ -109,7 +122,7 @@ void player_move(Player* player, int direction)
 }
 void player_draw(Player* player, Screen* screen)
 {
-	screen_draw(screen, player->pos, player->face);
+	screen->draw(player->pos, player->face);
 }
 void player_update(Player* player, const char* face)
 {
@@ -122,16 +135,23 @@ void player_onEnemyHit(Player* player)
 	strcpy(player->face, "\\(^_^)/");
 	player->nRemaining = 30;
 }
-
-
-void enemy_init(Enemy* enemy, int pos, const char* face)
+int  player_getPos(Player* player)
 {
+	return player->pos;
+}
+const char* player_getFace(Player* player)
+{
+	return player->face;
+}
 
+
+void enemy_init(Enemy* enemy, const char* face, int pos)
+{
 	strcpy(enemy->face, face);
 	enemy->pos = pos;
 	enemy->nRemaining = 0;
 }
-void enemy_move(Enemy* enemy, int direction) 
+void enemy_move(Enemy* enemy, int direction)
 {
 	direction == directionToLeft ? --(enemy->pos) : ++(enemy->pos);
 }
@@ -139,7 +159,7 @@ void enemy_draw(Enemy* enemy, Screen* screen)
 {
 	screen_draw(screen, enemy->pos, enemy->face);
 }
-void enemy_update(Enemy* enemy, const char* Face)
+void enemy_update(Enemy* enemy, const char* face)
 {
 	if (enemy->nRemaining == 0) return;
 
@@ -148,14 +168,20 @@ void enemy_update(Enemy* enemy, const char* Face)
 }
 bool enemy_isHit(Enemy* enemy, Bullet* bullet)
 {
+	int bullet_direction = bullet_getDirection(bullet);
+	int bullet_pos = bullet_getPos(bullet);
 	return (
-		(bullet->direction == directionToLeft && enemy->pos + strlen(enemy->face) - 1 == bullet->pos)
-		|| (bullet->direction == directionToRight && enemy->pos == bullet->pos));
+		(bullet_direction == directionToLeft && enemy->pos + strlen(enemy->face) - 1 == bullet_pos)
+		|| (bullet_direction == directionToRight && enemy->pos == bullet_pos));
 }
 void enemy_onHit(Enemy* enemy)
 {
 	strcpy(enemy->face, "(T_T)");
 	enemy->nRemaining = 10;
+}
+int  enemy_getPos(Enemy* enemy)
+{
+	return enemy->pos;
 }
 
 
@@ -171,12 +197,16 @@ void bullet_setFire(Bullet* bullet, Player* player, Enemy* enemy)
 	bullet->isReady = false; // inUse
 
 	// direction 설정
+	int enemy_pos = enemy_getPos(enemy);
+	int player_pos = player_getPos(player);
+	const char* player_face = player_getFace(player);
+
 	bullet->direction = directionToLeft;
-	if (player->pos < enemy->pos) bullet->direction = directionToRight;
+	if (player_pos < enemy_pos) bullet->direction = directionToRight;
 
 	// bullet position 설정
-	bullet->pos = player->pos;
-	if (bullet->direction == directionToRight) bullet->pos += (strlen(player->face) - 1);
+	bullet->pos = player_pos;
+	if (bullet->direction == directionToRight) bullet->pos += (strlen(player_face) - 1);
 }
 void bullet_move(Bullet* bullet)
 {
@@ -198,13 +228,22 @@ void bullet_update(Bullet* bullet, Player* player, Enemy* enemy, Screen* screen)
 
 	bullet_move(bullet);
 	if (enemy_isHit(enemy, bullet))
-	{ // 적이 총알을 맞았을 때
+	{ // 적 총알 피격
 		enemy_onHit(enemy);
 		player_onEnemyHit(player);
 		bullet_reuse(bullet);
 	}
 	if (!screen_isInRange(screen, bullet)) bullet_reuse(bullet);
 }
+int bullet_getpos(Bullet* bullet)
+{
+	return bullet->pos;
+}
+int  bullet_getDirection(Bullet* bullet)
+{
+	return bullet->direction;
+}
+
 void bullets_init(Bullets* bullets, unsigned int nBullets)
 {
 	if (nBullets == 0) nBullets = 80;
@@ -246,33 +285,25 @@ void bullets_deinit(Bullets* bullets)
 
 
 
-
-
-
-
 int main()
-{	
-
+{
 	int major;
 	int minor;
 
-	Screen screen; // 
-	Player player;
-	Enemy enemy;
+	Screen	screen(80);
+	Player	player;
+	Enemy	enemy;
 	Bullets bullets;
 
-
-	screen_init(&screen, 80);
 	player_init(&player, "(-_-)", 50);
-	enemy_init(&enemy, 10, "(`_#)", 10);
+	enemy_init(&enemy, "(`_#)", 10);
 	bullets_init(&bullets, 80);
 
-
-
 	// game loop
+
 	bool isLooping = true;
 	while (isLooping) {
-		screen_clear(&screen);
+		screen.clear();
 
 		player_update(&player, "(-_-)");
 		enemy_update(&enemy, "(`_#)");
@@ -282,46 +313,42 @@ int main()
 		enemy_draw(&enemy, &screen);
 		bullets_draw(&bullets, &screen);
 
-		screen_render(&screen);
+		screen.render();
 		Sleep(100);
 
-		// handle inputs
 		if (!_kbhit()) continue;
-			
-			major = _getch();
-			switch (major) {
-			case 'q' : //quit
-				isLooping = false;
-				break;
 
-			case ' ':
-				player_fire(&player, &bullets, &enemy);
+		major = _getch();
+		switch (major) {
+		case 'q':
+			isLooping = false;
+			break;
+
+		case ' ':
+			player_fire(&player, &bullets, &enemy);
+			break;
+		case 224: // arrow key, function key pressed
+			minor = _getch();
+			switch (minor) {
+			case 75: // left
+				player_move(&player, directionToLeft); // 				
 				break;
-			case 224: // arrow key, function key pressed
-				minor = _getch();
-				switch (minor) {
-				case 75: // left
-					player_move(&player, directionToLeft);
-					break;
-				case 77: // right
-					player_move(&player, directionToRight);
-					break;
-				case 72: // up
-					enemy_move(&enemy, directionToLeft);
-					break;
-				case 80: // down
-					enemy_move(&enemy, directionToRight);
-					break;
-				}
+			case 77: // right
+				player_move(&player, directionToRight);
+				break;
+			case 72: // up
+				enemy_move(&enemy, directionToLeft);
+				break;
+			case 80: // down
+				enemy_move(&enemy, directionToRight);
 				break;
 			}
-			///
+			break;
 		}
 	}
 	printf("\nGame Over\n");
 
 	bullets_deinit(&bullets);
-	screen_deinit(&screen);
-	
+
 	return 0;
 }
